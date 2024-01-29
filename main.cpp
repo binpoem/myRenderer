@@ -85,7 +85,8 @@ Vec3f barycentric(Vec3f* pts, Vec3f P) {
   return Vec3f(1.f - (u.x + u.y) / u.z, u.x / u.z, u.y / u.z);
 }
 
-void triangle(Vec3f* pts, float* zbuffer, TGAImage& image, TGAColor color) {
+void triangle(Vec3f* pts, float* zbuffer, TGAImage& image, Model* model,
+              Vec2f* uvs, float intensity) {
   Vec2f bboxmin(std::numeric_limits<float>::max(),
                 std::numeric_limits<float>::max());
   Vec2f bboxmax(-std::numeric_limits<float>::max(),
@@ -104,10 +105,14 @@ void triangle(Vec3f* pts, float* zbuffer, TGAImage& image, TGAColor color) {
       Vec3f bc_screen = barycentric(pts, P);
       if (bc_screen.x < 0 || bc_screen.y < 0 || bc_screen.z < 0) continue;
       P.z = 0;
-      for (int i = 0; i < 3; i++) P.z += pts[i].z * bc_screen.raw[i];
+      TGAColor color;
+      for (int i = 0; i < 3; i++) {
+        P.z += pts[i].z * bc_screen.raw[i];
+        color = color + model->diffuse(uvs[i]) * bc_screen.raw[i];
+      }
       if (zbuffer[int(P.x + P.y * width)] < P.z) {
         zbuffer[int(P.x + P.y * width)] = P.z;
-        image.set(P.x, P.y, color);
+        image.set(P.x, P.y, color * intensity);
       }
     }
   }
@@ -120,28 +125,29 @@ int main(int argc, char** argv) {
   TGAImage image(width, height, TGAImage::RGB);
 
   Vec3f light_dir(0, 0, -1);  // define light_dir
-  auto model = new Model{"../obj/african_head.obj"};
+  auto model =
+      new Model{"../obj/african_head.obj", "../obj/african_head_diffuse.tga"};
 
   auto zbuffer = std::array<float, width * height>();
   zbuffer.fill(std::numeric_limits<float>::lowest());
 
   for (int i = 0; i < model->nfaces(); i++) {
-    std::vector<int> face = model->face(i);
+    auto& face = model->face(i);
     Vec3f pts[3];
     Vec3f world_coords[3];
+    Vec2f uvs[3];
     for (int j = 0; j < 3; j++) {
-      auto v = model->vert(face[j]);
+      auto v = model->vert(face[j].ivert);
       pts[j] = world2screen(v);
       world_coords[j] = v;
+      uvs[j] = model->uv(face[j].iuv);
     }
     Vec3f n = (world_coords[2] - world_coords[0]) ^
               (world_coords[1] - world_coords[0]);
     n.normalize();
     float intensity = n * light_dir;
     if (intensity > 0) {
-      triangle(
-          pts, zbuffer.data(), image,
-          TGAColor(intensity * 255, intensity * 255, intensity * 255, 255));
+      triangle(pts, zbuffer.data(), image, model, uvs, intensity);
     }
   }
   image.flip_vertically();

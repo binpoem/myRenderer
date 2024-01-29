@@ -52,6 +52,18 @@ struct TGAColor {
     }
     return *this;
   }
+  TGAColor &operator*(float k) {
+    for (int i = 0; i < 4; ++i) {
+      this->raw[i] *= k;
+    }
+    return *this;
+  }
+  TGAColor &operator+(TGAColor &rhs) {
+    for (int i = 0; i < 4; ++i) {
+      this->raw[i] += rhs.raw[i];
+    }
+    return *this;
+  }
 };
 
 class TGAImage {
