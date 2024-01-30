@@ -3,6 +3,7 @@
 #include <iostream>
 #include <limits>
 
+#include "Camera.h"
 #include "Rasterizer.h"
 #include "Shader.h"
 #include "model.h"
@@ -13,18 +14,36 @@ const int height = 800;
 
 Model* model = NULL;
 
-Vec3f cameraPos(0, 0, 3);  //摄像机摆放的位置
-Vec3f lightDir(0, 0, -1);  //平行光方向
+// Vec3f cameraPos(0, 0, 3);  //摄像机摆放的位置
+Vec3f lightDir(-10.f, -1.f, -3.f);  //平行光方向
 //模型变换矩阵
 Matrix modelMatrix() { return Matrix::identity(4); }
 
+Vec3f eye_position(1.f, 1.f, 3.f);  //相机位置
+Vec3f center(0.f, 0.f, 0.f);        //相机中心指向center
+
+Camera camera(eye_position, Vec3f(0.f, 1.f, 0.f), center - eye_position);
+
 //视图变换矩阵
-Matrix viewMatrix() { return Matrix::identity(4); }
+Matrix viewMatrix() {
+  Matrix view = Matrix::identity(4);
+  Matrix r_inverse = Matrix::identity(4);
+  Matrix t_inverse = Matrix::identity(4);
+  for (int i = 0; i < 3; i++) {
+    r_inverse[0][i] = camera.Right[i];
+    r_inverse[1][i] = camera.Up[i];
+    r_inverse[2][i] = -camera.Front[i];
+
+    t_inverse[i][3] = -camera.Position[i];
+  }
+  view = r_inverse * t_inverse;
+  return view;
+}
 
 //透视投影变换矩阵（原作者版本，对照我们上面的公式）
 Matrix projectionMatrix() {
   Matrix projection = Matrix::identity(4);
-  projection[3][2] = -1.0f / cameraPos.z;
+  projection[3][2] = -1.0f / eye_position.z;
   return projection;
 }
 Vec3f vertex_shader(const vertex_shader_payload& payload) {
@@ -85,7 +104,7 @@ int main(int argc, char** argv) {
 
   //设置顶点着色器和片元着色器
   r.set_vertexShader(vertex_shader);
-  r.set_fragmentShader(normal_fragment_shader);
+  r.set_fragmentShader(TextureFragmentShader);
 
   //绘制模型
   r.draw(model->TriangleList);
