@@ -6,8 +6,14 @@
 #include <string>
 #include <vector>
 
-Model::Model(const char* filename, const char* textureFilepath)
-    : verts_(), faces_(), texture_(new TGAImage()) {
+#include "Triangle.h"
+
+Model::Model(const char* filename) : vertNum(0), faceNum(0) {
+  std::vector<Vec4f> verts_;
+  std::vector<std::vector<Vec3i>> faces_;
+  std::vector<Vec3f> norms_;
+  std::vector<Vec2f> uv_;
+
   std::ifstream in;
   in.open(filename, std::ifstream::in);
   if (in.fail()) return;
@@ -18,51 +24,55 @@ Model::Model(const char* filename, const char* textureFilepath)
     char trash;
     if (!line.compare(0, 2, "v ")) {
       iss >> trash;
-      Vec3f v;
-      for (int i = 0; i < 3; i++) iss >> v.raw[i];
+      Vec4f v;
+      for (int i = 0; i < 3; i++) iss >> v[i];
+      v[3] = 1.0f;
       verts_.push_back(v);
-    } else if (!line.compare(0, 3, "vn ")) {
-      iss >> trash >> trash;
-      Vec3f n;
-      for (int i = 0; i < 3; i++) iss >> n.raw[i];
-      norms_.push_back(n);
     } else if (!line.compare(0, 3, "vt ")) {
       iss >> trash >> trash;
       Vec2f uv;
-      for (int i = 0; i < 2; i++) iss >> uv.raw[i];
-      int t;
-      iss >> t;
-      uvs_.push_back(uv);
+      for (int i = 0; i < 2; i++) iss >> uv[i];
+      uv_.push_back(uv);
+    } else if (!line.compare(0, 3, "vn ")) {
+      iss >> trash >> trash;
+      Vec3f normal;
+      for (int i = 0; i < 3; i++) iss >> normal[i];
+      norms_.push_back(normal);
     } else if (!line.compare(0, 2, "f ")) {
       std::vector<Vec3i> f;
-      int itrash, idx[3];
+      Vec3i tmp;
       iss >> trash;
-      while (iss >> idx[0] >> trash >> idx[1] >> trash >> idx[2]) {
-        for (int i = 0; i < 3; ++i) {
-          idx[i]--;
-        };  // in wavefront obj all indices start at 1, not zero
-        f.push_back(Vec3i{idx[0], idx[1], idx[2]});
+      while (iss >> tmp[0] >> trash >> tmp[1] >> trash >> tmp[2]) {
+        for (int i = 0; i < 3; i++) tmp[i]--;
+        f.push_back(tmp);
       }
       faces_.push_back(f);
     }
   }
-  std::cerr << "# v# " << verts_.size() << " f# " << faces_.size() << std::endl;
-  texture_->read_tga_file(textureFilepath);
-  texture_->flip_vertically();
+  std::cerr << "# v# " << verts_.size() << " f# " << faces_.size() << " vt# "
+            << uv_.size() << " vn# " << norms_.size() << std::endl;
+
+  TriangleList.resize(faces_.size());
+  TriangleList.clear();
+
+  for (auto& face : faces_) {
+    Triangle tmp;
+
+    for (int i = 0; i < 3; ++i) {
+      tmp.v[i] = verts_[face[i].x];
+      tmp.texCoords[i] = uv_[face[i].y];
+      tmp.normal[i] = norms_[face[i].z];
+    }
+
+    TriangleList.push_back(tmp);
+  }
+
+  vertNum = static_cast<int>(verts_.size());
+  faceNum = static_cast<int>(faces_.size());
 }
 
 Model::~Model() {}
 
-int Model::nverts() { return (int)verts_.size(); }
+int Model::nverts() { return vertNum; }
 
-int Model::nfaces() { return (int)faces_.size(); }
-
-std::vector<Vec3i>& Model::face(int idx) { return faces_[idx]; }
-
-Vec3f Model::vert(int i) { return verts_[i]; }
-Vec2f Model::uv(int idx) { return uvs_[idx]; }
-Vec3f Model::norm(int idx) { return norms_[idx]; }
-TGAColor Model::diffuse(Vec2f uv) {
-  return texture_->get(uv.u * texture_->get_width(),
-                       uv.v * texture_->get_height());
-}
+int Model::nfaces() { return faceNum; }
